@@ -14,6 +14,7 @@ has 'repo-user' =>
     ( is => 'rw', isa => 'Str', required => 1, accessor => 'repo_user' );
 has 'repo-name' =>
     ( is => 'rw', isa => 'Str', required => 1, accessor => 'repo_name' );
+has 'author' => ( is => 'rw', isa => 'Str', predicate => 'has_author' );
 has 'tag' => ( is => 'rw', isa => 'Str', required => 1 );
 
 # Internal
@@ -101,15 +102,17 @@ sub update_pr_tags {
     for my $pr ( @{ $self->_prs } ) {
         my $pr_number      = $pr->{number};
         my $pr_title       = $pr->{title};
+        my $pr_login       = $pr->{user}->{login};
         my $pr_merge_state = $self->pr_merge_state($pr_number);
 
-        return if $pr_merge_state eq 'unknown';
+        next if $self->has_author && $self->author ne $pr_login;
+        next if $pr_merge_state eq 'unknown';
 
         my @pr_labels = map { $_->{name} } $self->issue_labels($pr_number);
 
         my $tag = $self->tag;
 
-        say "$pr_number: $pr_title: $pr_merge_state";
+        say "$pr_number ($pr_login): $pr_title: $pr_merge_state";
         if ( ( $pr_merge_state ne 'dirty' ) && ( grep {/$tag/} @pr_labels ) )
         {
             say "  Removing [$tag] on [$pr_number]...";
