@@ -2,6 +2,7 @@ package App::GitHubPR::Tag;
 
 use feature qw/say/;
 
+use List::Util qw/any none/;
 use Moose;
 use Net::GitHub;
 use Try::Tiny::Retry ':all';
@@ -94,7 +95,7 @@ sub pr_merge_state {
     }
     catch { warn "Status for $pr_number unknown: will be ignored." };
 
-    return $pr_merge_state;
+    return $pr_merge_state || 'unretrieved';
 }
 
 sub update_pr_tags {
@@ -106,14 +107,15 @@ sub update_pr_tags {
         my $pr_merge_state = $self->pr_merge_state($pr_number);
 
         next if $self->has_author && $self->author ne $pr_login;
-        next if $pr_merge_state eq 'unknown';
+        next if any { $_ eq $pr_merge_state } qw/unknown unretrieved/;
 
         my @pr_labels = map { $_->{name} } $self->issue_labels($pr_number);
 
         my $tag = $self->tag;
 
         say "$pr_number ($pr_login): $pr_title: $pr_merge_state";
-        if ( ( $pr_merge_state ne 'dirty' ) && ( grep {/$tag/} @pr_labels ) )
+        if ( ( $pr_merge_state ne 'dirty' ) &&
+             ( any { $_ eq $tag } @pr_labels ) )
         {
             say "  Removing [$tag] on [$pr_number]...";
             if ( !$self->dry_run ) {
@@ -121,7 +123,7 @@ sub update_pr_tags {
             }
         }
 
-        if ( ( $pr_merge_state eq 'dirty' ) && ( !grep {/$tag/} @pr_labels ) )
+        if ( ( $pr_merge_state eq 'dirty' ) && ( none {$_ eq $tag} @pr_labels ) )
         {
             say "  Adding [$tag] on [$pr_number]...";
             if ( !$self->dry_run ) {
